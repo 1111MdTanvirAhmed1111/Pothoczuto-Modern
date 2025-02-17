@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
 
 // Initialize Prisma client for database operations
 const prisma = new PrismaClient();
@@ -32,12 +34,15 @@ export class PostsService {
    * @param data - Object containing title, content and authorId
    * @returns Promise containing the created post
    */
-  async createPost(data: { title: string; content: string; authorId: number }) {
+  async createPost( { 
+    title,content,authorId
+  }, imageUrl) {
     return prisma.post.create({
       data: {
-        title: data.title,
-        content: data.content,
-        authorId: data.authorId,
+        title,
+        content,
+        authorId,
+        imageUrl,
       },
     });
   }
@@ -45,13 +50,34 @@ export class PostsService {
   /**
    * Updates an existing post
    * @param id - The unique identifier of the post to update
-   * @param data - Object containing optional title and content updates
+   * @param data - Object containing optional title, content and imageUrl updates
    * @returns Promise containing the updated post
    */
-  async updatePost(id: number, data: { title?: string; content?: string }) {
+  async updatePost(
+    id: number, 
+    data: { 
+      title?: string; 
+      content?: string;
+      imageUrl?: string;
+    }
+  ) {
+    // Get the old post to check if we need to delete an old image
+    const oldPost = await prisma.post.findUnique({
+      where: { id },
+    });
+
+    // If there's a new image and an old image exists, delete the old one
+    if (data.imageUrl && oldPost?.imageUrl) {
+      const filename = oldPost.imageUrl.split('/').pop() || '';
+      const oldImagePath = path.join('uploads', filename);
+      if (fs.existsSync(oldImagePath)) {
+        fs.unlinkSync(oldImagePath);
+      }
+    }
+
     return prisma.post.update({
       where: { id },
-      data: data,
+      data,
     });
   }
 
@@ -61,6 +87,20 @@ export class PostsService {
    * @returns Promise containing the deleted post
    */
   async deletePost(id: number) {
+    const post = await prisma.post.findUnique({
+      where: { id },
+    });
+
+    // Delete the associated image if it exists
+      if (post?.imageUrl) {
+        const filename = post.imageUrl.split('/').pop() || '';
+
+        const imagePath = path.join('uploads', filename);
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+        }
+      }
+
     return prisma.post.delete({
       where: { id },
     });

@@ -1,21 +1,46 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import fs from 'fs';
-import path from 'path';
 
-// Initialize Prisma client for database operations
-const prisma = new PrismaClient();
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
-export class PostsService {
-  constructor() {}
+export class PostsService implements OnModuleInit, OnModuleDestroy {
+  private prisma: PrismaClient;
 
-  /**
+  constructor() {
+    this.prisma = new PrismaClient({
+      log: ['query'],
+    });
+  }
+
+  async onModuleInit() {
+    await this.prisma.$connect();
+  }
+
+  async onModuleDestroy() {
+    await this.prisma.$disconnect();
+  }
+
+  /** 
    * Retrieves all posts from the database
    * @returns Promise containing array of all posts
    */
   async getAllPosts() {
-    return prisma.post.findMany();
+    return this.prisma.post.findMany({
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        imageUrl: true,
+        createdAt: true,
+        // শুধু প্রয়োজনীয় ফিল্ড সিলেক্ট করুন
+      },
+      take: 20, // পেজিনেশন
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
   }
 
   /**
@@ -24,7 +49,7 @@ export class PostsService {
    * @returns Promise containing the post if found, null otherwise
    */
   async getPostById(id: number) {
-    return prisma.post.findUnique({
+    return this.prisma.post.findUnique({
       where: { id },
     });
   }
@@ -37,7 +62,7 @@ export class PostsService {
   async createPost( { 
     title,content,authorId
   }, imageUrl) {
-    return prisma.post.create({
+    return this.prisma.post.create({
       data: {
         title,
         content,
@@ -62,7 +87,7 @@ export class PostsService {
     }
   ) {
     // Get the old post to check if we need to delete an old image
-    const oldPost = await prisma.post.findUnique({
+    const oldPost = await this.prisma.post.findUnique({
       where: { id },
     });
 
@@ -75,7 +100,7 @@ export class PostsService {
       }
     }
 
-    return prisma.post.update({
+    return this.prisma.post.update({
       where: { id },
       data,
     });
@@ -87,22 +112,33 @@ export class PostsService {
    * @returns Promise containing the deleted post
    */
   async deletePost(id: number) {
-    const post = await prisma.post.findUnique({
+    const post = await this.prisma.post.findUnique({
       where: { id },
     });
 
-    // Delete the associated image if it exists
-      if (post?.imageUrl) {
-        const filename = post.imageUrl.split('/').pop() || '';
-
-        const imagePath = path.join('uploads', filename);
-        if (fs.existsSync(imagePath)) {
-          fs.unlinkSync(imagePath);
-        }
+    if (post?.imageUrl) {
+      const filename = post.imageUrl.split('/').pop();
+      const imagePath = path.join('./images/uploads', filename || '');
+      console.log(imagePath);
+      if ( await fs.existsSync(imagePath)) {
+       await fs.unlinkSync(imagePath);
       }
+    }
 
-    return prisma.post.delete({
+    return this.prisma.post.delete({
       where: { id },
+    });
+  }
+
+  async findAll() {
+    // select শুধু প্রয়োজনীয় ফিল্ডগুলো
+    return this.prisma.post.findMany({
+      select: {
+        id: true,
+        title: true,
+        // শুধু প্রয়োজনীয় ফিল্ড সিলেক্ট করুন
+      },
+      take: 10, // পেজিনেশন ব্যবহার করুন
     });
   }
 }

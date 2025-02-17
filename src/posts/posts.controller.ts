@@ -1,10 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PostsService } from './posts.service';
-import { multerConfig } from '../config/multer.config';
-import { Express } from 'express';
 
-@Controller('posts')
+import { Express } from 'express';
+import { multerConfig } from '../config/multer.config';
+
+@Controller('api/posts')
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
